@@ -11,7 +11,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use leptos::prelude::*;
+use dioxus::prelude::*;
 use wasm_bindgen::prelude::*;
 
 use crate::components::regions::{Theater, TheaterId};
@@ -282,12 +282,16 @@ fn leaflet_available() -> bool {
 
 /// Tactical map panel
 #[component]
-pub fn MapPanel() -> impl IntoView {
-    let state = use_app_state();
+pub fn MapPanel() -> Element {
+    let mut state = use_app_state();
     let map_id = "tactical-map";
 
-    // Initialize map after a small delay to ensure DOM is ready
-    Effect::new(move |_| {
+    // Initialize map once, after first paint (effects run post-render, and a
+    // short setTimeout guards against Leaflet's script tag still loading).
+    let mut initialized = use_signal(|| false);
+    use_effect(move || {
+        if *initialized.peek() { return; }
+        initialized.set(true);
         // Use setTimeout to ensure DOM element exists
         let closure = Closure::once(Box::new(move || {
             if !leaflet_available() {
@@ -303,7 +307,7 @@ pub fn MapPanel() -> impl IntoView {
             }
 
             // Create map on the initially selected theater
-            let initial = state.selected_theater.get_untracked().theater();
+            let initial = state.selected_theater.peek().clone().theater();
             // Rc: the handle is shared by the marker sync, the theater-switch
             // effect and the burst effect. wasm_bindgen extern types have no
             // own Clone (a .clone() derefs to JsValue and loses the type), so
@@ -360,14 +364,14 @@ pub fn MapPanel() -> impl IntoView {
                 let route = Rc::clone(&route);
                 let map = Rc::clone(&map);
                 move || {
-                    let drones = state.drones.get_untracked();
+                    let drones = state.drones.peek().clone();
                     let mut ordered: Vec<_> = drones.values().cloned().collect();
                     // Stable order, so a drone keeps its slot in the formation
                     // instead of shuffling with HashMap iteration order.
                     ordered.sort_by(|a, b| a.callsign.cmp(&b.callsign));
 
                     let mut known = markers.borrow_mut();
-                    let live = state.live_positions.get_untracked();
+                    let live = state.live_positions.peek().clone();
                     for drone in &ordered {
                         let accent = status_accent(&drone.status);
                         // Popup carries the SAME live ALT/HDG the bottom-right
@@ -413,7 +417,7 @@ pub fn MapPanel() -> impl IntoView {
                         )
                         .ok();
 
-                        let ip = route.get()[0];
+                        let ip = route()[0];
                         let marker = create_marker(&lat_lng(ip.0, ip.1), &opts.into());
                         marker.bind_popup(&popup);
                         marker.marker_add_to(&map);
@@ -425,9 +429,8 @@ pub fn MapPanel() -> impl IntoView {
                         {
                             let id = drone.drone_id;
                             let on_click = Closure::wrap(Box::new(move || {
-                                state.selected_drone.update(|sel| {
-                                    *sel = if *sel == Some(id) { None } else { Some(id) };
-                                });
+                                let cur = *state.selected_drone.peek();
+                                state.selected_drone.set(if cur == Some(id) { None } else { Some(id) });
                             }) as Box<dyn Fn()>);
                             marker.marker_on("click", on_click.as_ref().unchecked_ref());
                             on_click.forget(); // lives as long as the marker
@@ -481,8 +484,8 @@ pub fn MapPanel() -> impl IntoView {
             // latest -> prev and store the new server fix with its arrival time.
             {
                 let anchors = Rc::clone(&anchors);
-                Effect::new(move |_| {
-                    let drones = state.drones.get();
+                use_effect(move || {
+                    let drones = state.drones.read().clone();
                     let now = js_sys::Date::now();
                     let mut a = anchors.borrow_mut();
                     for d in drones.values() {
@@ -566,10 +569,10 @@ pub fn MapPanel() -> impl IntoView {
                 let layers = Rc::clone(&layers);
                 let route = Rc::clone(&route);
                 let markers = Rc::clone(&markers);
-                let last: Rc<Cell<TheaterId>> = Rc::new(Cell::new(state.selected_theater.get_untracked()));
-                Effect::new(move |_| {
-                    let id = state.selected_theater.get();
-                    if id == last.get() { return; }
+                let last: Rc<Cell<TheaterId>> = Rc::new(Cell::new(state.selected_theater.peek().clone()));
+                use_effect(move || {
+                    let id = state.selected_theater.read().clone();
+                    if id == last() { return; }
                     last.set(id);
                     let t = id.theater();
                     map.set_view(&lat_lng(t.center.0, t.center.1), t.zoom);
@@ -598,12 +601,12 @@ pub fn MapPanel() -> impl IntoView {
                 let positions = Rc::clone(&positions);
                 let seen: Rc<RefCell<HashSet<uuid::Uuid>>> = Rc::new(RefCell::new(HashSet::new()));
                 let primed = Rc::new(Cell::new(false));
-                Effect::new(move |_| {
-                    let events = state.engagements.get();
+                use_effect(move || {
+                    let events = state.engagements.read().clone();
                     let mut seen = seen.borrow_mut();
                     // First observation: mark everything seen without firing,
                     // so a page load mid-mission doesn't detonate 20 bursts.
-                    if !primed.get() {
+                    if !primed() {
                         for e in &events { seen.insert(e.id); }
                         primed.set(true);
                         return;
@@ -640,10 +643,10 @@ pub fn MapPanel() -> impl IntoView {
         closure.forget(); // Prevent closure from being dropped
     });
 
-    let selected_drone = move || state.selected_drone.get();
+    let selected_drone = move || state.selected_drone.read().clone();
     let drone_position = move || {
         selected_drone().and_then(|id| {
-            state.drones.get().get(&id).map(|d| d.position.clone())
+            state.drones.read().clone().get(&id).map(|d| d.position.clone())
         })
     };
 
@@ -653,8 +656,8 @@ pub fn MapPanel() -> impl IntoView {
     // falling back to the last polled position before the first fix lands.
     // Returns (callsign, altitude_m, heading_deg).
     let readout = move || -> Option<(String, f64, f32)> {
-        let drones = state.drones.get();
-        let live = state.live_positions.get();
+        let drones = state.drones.read().clone();
+        let live = state.live_positions.read().clone();
         let target = selected_drone().and_then(|id| drones.get(&id).cloned()).or_else(|| {
             // Lead = lowest callsign (ALPHA-01); stable regardless of HashMap order.
             drones.values().min_by(|a, b| a.callsign.cmp(&b.callsign)).cloned()
@@ -666,88 +669,80 @@ pub fn MapPanel() -> impl IntoView {
         Some((target.callsign, alt, hdg))
     };
 
-    view! {
-        <div class="map-container">
-            <div id=map_id class="leaflet-map"></div>
+    // ---- View-time values (Dioxus re-renders on any signal read here) ----
+    let viewed = (state.selected_theater)();
+    let aor_label = viewed.theater().aor;
+    let flown = flown_theater(&state.drones.read());
+    // Tasking in flight: the selector issued an order and the convoy has not
+    // reported from the new theater yet. Purely a transition state -- clears
+    // itself when the server's positions land in the viewed theater.
+    if flown == Some(viewed) && state.retasking.peek().is_some() {
+        state.retasking.set(None);
+    }
+    let pending = (state.retasking)().is_some() || matches!(flown, Some(f) if f != viewed);
+    let retask_label = match flown {
+        Some(f) if f != viewed => format!("RETASKING FROM {}", f.theater().label),
+        _ => "RETASKING — AWAITING CONVOY".to_string(),
+    };
+    let retask_error = (state.retask_error)();
+    let sel_pos = drone_position();
+    let ro = readout();
+    let ro_cs = ro.as_ref().map(|(cs, _, _)| cs.clone()).unwrap_or_else(|| "NO CONTACT".to_string());
+    let ro_alt = ro.as_ref().map(|(_, alt, _)| format!("{:>5.0} m", alt)).unwrap_or_else(|| "  --- m".to_string());
+    let ro_hdg = ro.as_ref().map(|(_, _, hdg)| format!("{:03.0}°", hdg)).unwrap_or_else(|| "---°".to_string());
 
-            <div class="map-overlay">
-                // ONE HUD strip. Segment 1: the AOR being viewed. Segment 2
-                // (only when the sim is flying elsewhere): the truth-guard
-                // warning with the exact command. One dark bar, no stacking.
-                <div class="map-hud">
-                    <div class="map-hud-row aor">
-                        <span class="status-dot nominal"></span>
-                        {move || state.selected_theater.get().theater().aor}
-                    </div>
-                    // Tasking in flight: the selector issued an order and the
-                    // convoy has not reported from the new theater yet. Purely
-                    // a transition state -- clears itself when the server's
-                    // positions land in the viewed theater. No operator
-                    // action is ever required from here: the UI is the
-                    // commander, the record is the truth, the sim obeys.
-                    {move || {
-                        let viewed = state.selected_theater.get();
-                        let flown = flown_theater(&state.drones.get());
-                        if flown == Some(viewed) && state.retasking.get_untracked().is_some() {
-                            state.retasking.set(None);
+    rsx! {
+        div { class: "map-container",
+            div { id: "{map_id}", class: "leaflet-map" }
+
+            div { class: "map-overlay",
+                // ONE HUD card: AOR row, then (only when tasking is in flight)
+                // the RETASKING row, then (only on a rejected order) the error.
+                div { class: "map-hud",
+                    div { class: "map-hud-row aor",
+                        span { class: "status-dot nominal" }
+                        "{aor_label}"
+                    }
+                    if pending {
+                        div { class: "map-hud-row retask",
+                            span { class: "status-dot warning pulse" }
+                            "{retask_label}"
                         }
-                        let pending = state.retasking.get().is_some()
-                            || matches!(flown, Some(f) if f != viewed);
-                        let label = match flown {
-                            Some(f) if f != viewed => format!("RETASKING FROM {}", f.theater().label),
-                            _ => "RETASKING — AWAITING CONVOY".to_string(),
-                        };
-                        pending.then(|| view! {
-                            <div class="map-hud-row retask">
-                                <span class="status-dot warning pulse"></span>
-                                {label}
-                            </div>
-                        })
-                    }}
-                    // A rejected tasking order is shown, not swallowed.
-                    {move || state.retask_error.get().map(|e| view! {
-                        <div class="map-hud-row error">
-                            <span class="status-dot critical"></span>
-                            {format!("TASKING REJECTED: {e}")}
-                        </div>
-                    })}
-                </div>
-                {move || drone_position().map(|pos| view! {
-                    <div class="map-control">
-                        <span class="text-accent">"SEL:"</span>
+                    }
+                    if let Some(e) = retask_error {
+                        div { class: "map-hud-row error",
+                            span { class: "status-dot critical" }
+                            "TASKING REJECTED: {e}"
+                        }
+                    }
+                }
+                if let Some(pos) = sel_pos {
+                    div { class: "map-control",
+                        span { class: "text-accent", "SEL:" }
                         {format!("{:.4}°N {:.4}°E", pos.latitude, pos.longitude)}
-                    </div>
-                })}
-            </div>
+                    }
+                }
+            }
 
-            <div style="position: absolute; bottom: 16px; right: 16px; z-index: 1000;">
-                <div class="map-control readout" style="font-size: 0.7rem;">
-                    <span class="readout-cs">
-                        {move || readout().map(|(cs, _, _)| cs).unwrap_or_else(|| "NO CONTACT".to_string())}
-                    </span>
-                    <span class="text-muted">"ALT"</span>
-                    <span class="readout-val">
-                        {move || readout().map(|(_, alt, _)| format!("{:>5.0} m", alt)).unwrap_or_else(|| "  --- m".to_string())}
-                    </span>
-                    <span class="text-muted">"HDG"</span>
-                    <span class="readout-val">
-                        {move || readout().map(|(_, _, hdg)| format!("{:03.0}°", hdg)).unwrap_or_else(|| "---°".to_string())}
-                    </span>
-                </div>
-            </div>
-        </div>
+            div { style: "position: absolute; bottom: 16px; right: 16px; z-index: 1000;",
+                div { class: "map-control readout", style: "font-size: 0.7rem;",
+                    span { class: "readout-cs", "{ro_cs}" }
+                    span { class: "text-muted", "ALT" }
+                    span { class: "readout-val", "{ro_alt}" }
+                    span { class: "text-muted", "HDG" }
+                    span { class: "readout-val", "{ro_hdg}" }
+                }
+            }
+        }
     }
 }
 
-/// Map fallback when Leaflet not loaded
+/// Map fallback when Leaflet is not loaded
 #[component]
-pub fn MapFallback() -> impl IntoView {
-    view! {
-        <div class="map-container" style="display: flex; align-items: center; justify-content: center;">
-            <div style="text-align: center;">
-                <div class="spinner" style="margin: 0 auto 16px;"></div>
-                <div class="text-muted">"Loading tactical map..."</div>
-            </div>
-        </div>
+pub fn MapFallback() -> Element {
+    rsx! {
+        div { class: "map-container", style: "display: flex; align-items: center; justify-content: center;",
+            div { class: "text-muted", "MAP UNAVAILABLE — Leaflet not loaded" }
+        }
     }
 }

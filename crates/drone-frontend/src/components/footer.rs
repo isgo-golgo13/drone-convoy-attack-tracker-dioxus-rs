@@ -2,7 +2,9 @@
 //!
 //! Status bar with system information.
 
-use leptos::prelude::*;
+use dioxus::prelude::*;
+
+use crate::state::use_app_state;
 
 /// Dissemination marking shown in the footer. FOUO ("For Official Use Only")
 /// is the legacy pre-2020 DoD marking; the current equivalent is CUI
@@ -10,56 +12,42 @@ use leptos::prelude::*;
 /// demo can wear whichever reads right for the room.
 pub const CLASSIFICATION_MARKING: &str = "UNCLASSIFIED // CUI";
 
-use crate::state::use_app_state;
-
 /// Footer status bar
 #[component]
-pub fn Footer() -> impl IntoView {
+pub fn Footer() -> Element {
     let state = use_app_state();
 
-    let connection_status = move || {
-        if state.ws_connected.get() {
-            ("nominal", "CONNECTED")
-        } else {
-            ("critical", "DISCONNECTED")
-        }
+    let (dot_class, conn_label) = if (state.ws_connected)() {
+        ("nominal", "CONNECTED")
+    } else {
+        ("critical", "DISCONNECTED")
     };
+    let drone_count = state.drones.read().len();
+    let alert_count = state.alerts.read().len();
 
-    let drone_count = move || state.drones.get().len();
-    let alert_count = move || state.alerts.get().len();
+    rsx! {
+        footer { class: "hud-footer",
+            div { class: "flex items-center gap-lg",
+                span { class: "text-muted", "DRONE OPS v0.1.0" }
+                span { class: "text-muted", "|" }
+                span {
+                    span { class: "text-muted", "ASSETS: " }
+                    span { class: "text-accent", "{drone_count}" }
+                }
+            }
 
-    view! {
-        <footer class="hud-footer">
-            <div class="flex items-center gap-lg">
-                <span class="text-muted">"DRONE OPS v0.1.0"</span>
-                <span class="text-muted">"|"</span>
-                <span>
-                    <span class="text-muted">"ASSETS: "</span>
-                    <span class="text-accent">{drone_count}</span>
-                </span>
-            </div>
+            div { class: "flex items-center gap-lg",
+                if alert_count > 0 {
+                    span { class: "status-badge warning", "{alert_count} ALERTS" }
+                }
 
-            <div class="flex items-center gap-lg">
-                {move || {
-                    let count = alert_count();
-                    if count > 0 {
-                        Some(view! {
-                            <span class="status-badge warning">
-                                {count}" ALERTS"
-                            </span>
-                        })
-                    } else {
-                        None
-                    }
-                }}
+                span { class: "flex items-center gap-xs",
+                    span { class: "status-dot {dot_class}" }
+                    span { class: "text-sm", "{conn_label}" }
+                }
 
-                <span class="flex items-center gap-xs">
-                    <span class=move || format!("status-dot {}", connection_status().0)></span>
-                    <span class="text-sm">{move || connection_status().1}</span>
-                </span>
-
-                <span class="text-muted">{format!("CLASSIFICATION: {CLASSIFICATION_MARKING}")}</span>
-            </div>
-        </footer>
+                span { class: "text-muted", "CLASSIFICATION: {CLASSIFICATION_MARKING}" }
+            }
+        }
     }
 }

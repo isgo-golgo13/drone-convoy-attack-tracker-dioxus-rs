@@ -1,16 +1,16 @@
 apiVersion: v2
 name: drone-convoy-attack-tracker
 description: >-
-  DoD attack drone convoy tracking system — Rust: Leptos/WASM tactical HUD,
+  DoD attack drone convoy tracking system — Rust: Dioxus/WASM tactical HUD,
   GraphQL API (axum + async-graphql), ScyllaDB + Redis. Served through the
   Cilium Kubernetes Gateway API with cert-manager TLS.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-keywords: [rust, leptos, wasm, graphql, scylladb, redis, gateway-api, cilium]
-home: https://github.com/isgo-golgo13/drone-convoy-attack-tracker-leptos-rs
+keywords: [rust, dioxus, wasm, graphql, scylladb, redis, gateway-api, cilium]
+home: https://github.com/isgo-golgo13/drone-convoy-attack-tracker-dioxus-rs
 sources:
-  - https://github.com/isgo-golgo13/drone-convoy-attack-tracker-leptos-rs
+  - https://github.com/isgo-golgo13/drone-convoy-attack-tracker-dioxus-rs
 maintainers:
   - name: Tomas Wallick
 

@@ -1,6 +1,7 @@
 //! # UI Components Module
 //!
-//! Reusable Leptos components for the tactical HUD.
+//! Dioxus components for the tactical HUD. Same DOM and CSS classes as the
+//! Leptos build; `main.css` is shared byte-for-byte.
 
 pub mod charts;
 pub mod drone_card;

@@ -4,7 +4,7 @@
 # Classification: UNCLASSIFIED // FOR OFFICIAL USE ONLY
 #
 # Makefile for building, testing, and deploying the complete drone convoy
-# tracking system including ScyllaDB backend, GraphQL API, and Leptos frontend.
+# tracking system including ScyllaDB backend, GraphQL API, and Dioxus frontend.
 #
 # Usage:
 #   make help          - Show available targets
@@ -25,7 +25,7 @@ MAKEFLAGS += --no-builtin-rules
 # Configuration
 # ------------------------------------------------------------------------------
 
-PROJECT_NAME := drone-convoy-tracker
+PROJECT_NAME := drone-convoy-tracker-dioxus
 RUST_VERSION ?= 1.89   # must be >= 1.85 for edition 2024
 
 # Source trees whose mtimes drive rebuild detection. Deliberately excludes
@@ -57,7 +57,7 @@ CARGO := cargo
 RUSTFLAGS_RELEASE ?=
 CARGO_BUILD_JOBS := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-TRUNK := trunk
+DX := dx
 WASM_TARGET := wasm32-unknown-unknown
 
 PODMAN := podman
@@ -99,7 +99,7 @@ NC := \033[0m
 #
 # Why touch: overlaying a zip or checkout preserves the ARCHIVE's mtimes, so a
 # file you just changed can land with a timestamp OLDER than the artifact built
-# from its previous version. Cargo and Trunk decide staleness from mtimes, so
+# from its previous version. Cargo and dx decide staleness from mtimes, so
 # the change compiles away to nothing and you stare at stale output. Restamping
 # before every build makes that class of bug impossible.
 #
@@ -142,8 +142,14 @@ serve-api:
 	 $(CARGO) run --release --package drone-graphql-api
 
 .PHONY: serve-frontend
-serve-frontend: wasm-check
-	@cd $(FRONTEND_DIR) && $(TRUNK) serve
+serve-frontend: wasm-check frontend-assets
+	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000 --proxy http://localhost:8080
+
+# Copy the shared favicon into the crate's static asset dir (dx serves it at
+# /assets/). assets/images/ at the repo root remains the single source.
+.PHONY: frontend-assets
+frontend-assets:
+	@mkdir -p $(FRONTEND_DIR)/assets && cp assets/images/drone-favicon.svg $(FRONTEND_DIR)/assets/drone-favicon.svg
 
 # ------------------------------------------------------------------------------
 # deps -- ScyllaDB and Redis only. Plain `podman run`, deliberately NOT compose:
@@ -236,7 +242,7 @@ setup:
 	@printf "$(CYAN)▶ Installing development dependencies...$(NC)\n"
 	@rustup show active-toolchain || rustup default stable
 	@rustup target add $(WASM_TARGET)
-	@cargo install trunk --locked 2>/dev/null || true
+	@cargo install dioxus-cli --locked 2>/dev/null || true
 	@cargo install wasm-bindgen-cli --locked 2>/dev/null || true
 	@cargo install cargo-watch --locked 2>/dev/null || true
 	@cargo install cargo-audit --locked 2>/dev/null || true
@@ -246,12 +252,12 @@ setup:
 setup-wasm:
 	@printf "$(CYAN)▶ Setting up WASM environment...$(NC)\n"
 	@rustup target add $(WASM_TARGET)
-	@cargo install trunk --locked 2>/dev/null || echo "trunk already installed"
+	@cargo install dioxus-cli --locked 2>/dev/null || echo "dioxus-cli (dx) already installed"
 	@cargo install wasm-bindgen-cli --locked 2>/dev/null || echo "wasm-bindgen-cli already installed"
 	@printf "$(GREEN)✓ WASM environment ready$(NC)\n"
 	@echo ""
 	@echo "  WASM target: $(WASM_TARGET)"
-	@echo "  Trunk:       $$(trunk --version 2>/dev/null || echo 'not found')"
+	@echo "  dx:          $$(dx --version 2>/dev/null || echo 'not found')"
 	@echo ""
 
 .PHONY: wasm-check
@@ -260,9 +266,9 @@ wasm-check:
 	@rustup target list --installed | grep -q $(WASM_TARGET) && \
 		echo "$(GREEN)✓ WASM target installed$(NC)" || \
 		{ echo "$(RED)✗ WASM target missing - run 'make setup-wasm'$(NC)"; exit 1; }
-	@command -v trunk >/dev/null 2>&1 && \
-		echo "$(GREEN)✓ trunk: $$(trunk --version)$(NC)" || \
-		{ echo "$(RED)✗ trunk not found - run 'make setup-wasm'$(NC)"; exit 1; }
+	@command -v dx >/dev/null 2>&1 && \
+		echo "$(GREEN)✓ dx: $$(dx --version)$(NC)" || \
+		{ echo "$(RED)✗ dx (dioxus-cli) not found - run 'make setup-wasm'$(NC)"; exit 1; }
 	@command -v wasm-bindgen >/dev/null 2>&1 && \
 		echo "$(GREEN)✓ wasm-bindgen: $$(wasm-bindgen --version)$(NC)" || \
 		echo "$(YELLOW)⚠ wasm-bindgen not found (optional)$(NC)"
@@ -270,7 +276,7 @@ wasm-check:
 .PHONY: check-deps
 check-deps:
 	@command -v cargo >/dev/null 2>&1 || { echo "$(RED)✗ cargo not found$(NC)"; exit 1; }
-	@command -v trunk >/dev/null 2>&1 || { echo "$(RED)✗ trunk not found - run 'make setup'$(NC)"; exit 1; }
+	@command -v dx >/dev/null 2>&1 || { echo "$(RED)✗ dx (dioxus-cli) not found - run 'make setup'$(NC)"; exit 1; }
 	@rustup target list --installed | grep -q $(WASM_TARGET) || { echo "$(RED)✗ WASM target not installed$(NC)"; exit 1; }
 	@printf "$(GREEN)✓ Dependencies OK$(NC)\n"
 
@@ -300,11 +306,11 @@ build-backend:
 	@printf "$(GREEN)✓ Backend build complete$(NC)\n"
 
 .PHONY: build-frontend
-build-frontend: wasm-check
-	@printf "$(CYAN)▶ Building frontend (WASM)...$(NC)\n"
-	@cd $(FRONTEND_DIR) && $(TRUNK) build --release
+build-frontend: wasm-check frontend-assets
+	@printf "$(CYAN)▶ Building frontend (WASM, Dioxus)...$(NC)\n"
+	@cd $(FRONTEND_DIR) && $(DX) build --release --platform web
 	@printf "$(GREEN)✓ Frontend build complete$(NC)\n"
-	@echo "  Output: $(FRONTEND_DIR)/dist/"
+	@echo "  Output: $(FRONTEND_DIR)/target/dx/drone-frontend/release/web/public/"
 
 .PHONY: build-debug
 build-debug:
@@ -381,7 +387,7 @@ dev-backend:
 .PHONY: dev-frontend
 dev-frontend: wasm-check
 	@printf "$(CYAN)▶ Starting frontend dev server...$(NC)\n"
-	@cd $(FRONTEND_DIR) && $(TRUNK) serve --open
+	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000 --proxy http://localhost:8080 --open
 
 .PHONY: dev-db
 dev-db:

@@ -14,10 +14,10 @@ nameOverride: ""
 image:
   registry: ghcr.io/isgo-golgo13
   api:
-    repository: drone-convoy-attack-tracker-api
+    repository: drone-convoy-attack-tracker-dioxus-api
     tag: ""            # defaults to .Chart.AppVersion
   frontend:
-    repository: drone-convoy-attack-tracker-frontend
+    repository: drone-convoy-attack-tracker-dioxus-frontend
     tag: ""
   pullPolicy: IfNotPresent
   pullSecrets: []
@@ -42,7 +42,7 @@ frontend:
 # ---------------------------------------------------------------------------
 # Networking -- Cilium Kubernetes Gateway API. There is no Ingress in this
 # chart and no Ingress controller is assumed. One hostname fronts both the
-# dashboard and the API: the Leptos client talks same-origin /graphql, so
+# dashboard and the API: the Dioxus client talks same-origin /graphql, so
 # there is no CORS surface and no API URL baked into the WASM bundle.
 # ---------------------------------------------------------------------------
 gateway:

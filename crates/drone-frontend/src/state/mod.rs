@@ -3,60 +3,60 @@
 //! Reactive state management for the drone convoy HUD.
 
 use chrono::{DateTime, Utc};
-use leptos::prelude::*;
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Global application state
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct AppState {
-    pub selected_convoy: RwSignal<Option<Uuid>>,
-    pub selected_drone: RwSignal<Option<Uuid>>,
-    pub leaderboard: RwSignal<Vec<LeaderboardEntry>>,
-    pub drones: RwSignal<HashMap<Uuid, DroneState>>,
-    pub engagements: RwSignal<Vec<EngagementEvent>>,
+    pub selected_convoy: Signal<Option<Uuid>>,
+    pub selected_drone: Signal<Option<Uuid>>,
+    pub leaderboard: Signal<Vec<LeaderboardEntry>>,
+    pub drones: Signal<HashMap<Uuid, DroneState>>,
+    pub engagements: Signal<Vec<EngagementEvent>>,
     /// Rolling convoy-average telemetry, one point per poll tick. The chart
     /// reads this reactively; `lib.rs` appends and caps it.
-    pub telemetry_series: RwSignal<Vec<TelemetryPoint>>,
+    pub telemetry_series: Signal<Vec<TelemetryPoint>>,
     /// Which tactical theater the map shows. Written by the header's mission
     /// selector, read by `map.rs`. Default Afghanistan (Kandahar).
-    pub selected_theater: RwSignal<crate::components::regions::TheaterId>,
+    pub selected_theater: Signal<crate::components::regions::TheaterId>,
     /// Smoothed live position per drone for the GPS readout: the map's flight
     /// loop interpolates between the last two SERVER fixes (from the 2 s
     /// poll) at animation rate and writes here. Truth is re-anchored on every
     /// poll; the display glides between fixes — exactly what a real GPS/INS
     /// display does. Never invented: with a single fix it holds that fix.
-    pub live_positions: RwSignal<HashMap<Uuid, LivePosition>>,
+    pub live_positions: Signal<HashMap<Uuid, LivePosition>>,
     /// A tasking order is in flight: the selector chose this theater and the
     /// convoy record has been (or is being) updated, but the airframes have
     /// not yet reported from there. Cleared by the map when the server's
     /// positions arrive in the new theater. Drives the RETASKING indicator.
-    pub retasking: RwSignal<Option<crate::components::regions::TheaterId>>,
+    pub retasking: Signal<Option<crate::components::regions::TheaterId>>,
     /// Last tasking order the API rejected (message), shown on the HUD card
     /// so a failure is never silent. Cleared on the next order.
-    pub retask_error: RwSignal<Option<String>>,
-    pub ws_connected: RwSignal<bool>,
-    pub mission_start: RwSignal<Option<DateTime<Utc>>>,
-    pub alerts: RwSignal<Vec<Alert>>,
+    pub retask_error: Signal<Option<String>>,
+    pub ws_connected: Signal<bool>,
+    pub mission_start: Signal<Option<DateTime<Utc>>>,
+    pub alerts: Signal<Vec<Alert>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
-            selected_convoy: RwSignal::new(None),
-            selected_drone: RwSignal::new(None),
-            leaderboard: RwSignal::new(Vec::new()),
-            drones: RwSignal::new(HashMap::new()),
-            engagements: RwSignal::new(Vec::new()),
-            telemetry_series: RwSignal::new(Vec::new()),
-            selected_theater: RwSignal::new(crate::components::regions::TheaterId::default()),
-            live_positions: RwSignal::new(HashMap::new()),
-            retasking: RwSignal::new(None),
-            retask_error: RwSignal::new(None),
-            ws_connected: RwSignal::new(false),
-            mission_start: RwSignal::new(None),
-            alerts: RwSignal::new(Vec::new()),
+            selected_convoy: Signal::new(None),
+            selected_drone: Signal::new(None),
+            leaderboard: Signal::new(Vec::new()),
+            drones: Signal::new(HashMap::new()),
+            engagements: Signal::new(Vec::new()),
+            telemetry_series: Signal::new(Vec::new()),
+            selected_theater: Signal::new(crate::components::regions::TheaterId::default()),
+            live_positions: Signal::new(HashMap::new()),
+            retasking: Signal::new(None),
+            retask_error: Signal::new(None),
+            ws_connected: Signal::new(false),
+            mission_start: Signal::new(None),
+            alerts: Signal::new(Vec::new()),
         }
     }
 }
@@ -224,11 +224,12 @@ pub enum WaypointStatus {
     Skipped,
 }
 
-pub fn provide_app_state() {
-    let state = AppState::new();
-    provide_context(state);
+pub fn provide_app_state() -> AppState {
+    // Dioxus: signals are created inside a component scope; the App component
+    // calls this once via use_context_provider.
+    use_context_provider(AppState::new)
 }
 
 pub fn use_app_state() -> AppState {
-    expect_context::<AppState>()
+    use_context::<AppState>()
 }

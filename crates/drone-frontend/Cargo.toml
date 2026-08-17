@@ -3,7 +3,7 @@ name = "drone-frontend"
 version = "0.1.0"
 edition = "2024"
 authors.workspace = true
-license = "MIT"
+license-file = "../../LICENSE"
 description = "Tactical HUD frontend for drone convoy tracking system"
 
 [[bin]]
@@ -14,10 +14,8 @@ path = "src/main.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Leptos framework
-leptos = { version = "0.7", features = ["csr"] }
-leptos_router = "0.7"
-leptos_meta = "0.7"
+# Dioxus framework (0.7 stable; 0.8 is alpha -- not for the product)
+dioxus = { version = "0.7", features = ["web"] }
 
 # Charming for charts (ECharts wrapper)
 charming = { version = "0.4", features = ["wasm"] }

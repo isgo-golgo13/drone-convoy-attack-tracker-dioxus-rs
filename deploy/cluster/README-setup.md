@@ -52,7 +52,7 @@ You should see three version lines and no errors. If any command says "not found
 ## Step 2 — Go to the project
 
 ```shell
-cd /path/to/drone-convoy-attack-tracker-leptos-rs
+cd /path/to/drone-convoy-attack-tracker-dioxus-rs
 ```
 
 Every command below is run from this directory. Check you're in the right place:

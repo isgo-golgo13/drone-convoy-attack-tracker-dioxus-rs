@@ -8,12 +8,11 @@
     
     <title>DRONE OPS | Convoy Tracker</title>
     
-    <!-- Favicon: the same airframe SVG the map and drone cards render.
-         Trunk copies it to the dist root; its custom-property FALLBACK
-         colors are the HUD theme (green accent on dark body), which is what
-         renders in favicon context where no CSS variables are set. -->
-    <link data-trunk rel="copy-file" href="../../assets/images/drone-favicon.svg"/>
-    <link rel="icon" type="image/svg+xml" href="/drone-favicon.svg">
+    <!-- Favicon: the same airframe SVG the map and drone cards render, with
+         HUD-green fallback colors baked in for favicon context. Served from
+         the crate's static asset dir (see Dioxus.toml asset_dir; the Makefile
+         syncs assets/images there via `make frontend-assets`). -->
+    <link rel="icon" type="image/svg+xml" href="/assets/drone-favicon.svg">
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,8 +24,8 @@
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
           crossorigin="">
     
-    <!-- App CSS (injected by Trunk) -->
-    <link data-trunk rel="css" href="style/main.css">
+    <!-- App CSS: byte-identical to the Leptos build (see Dioxus.toml [web.resource]) -->
+    <link rel="stylesheet" href="/style/main.css">
     
     <style>
         /* Critical CSS for initial load */
@@ -105,14 +104,17 @@
     <!-- ECharts for Charming -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     
-    <!-- WASM App (injected by Trunk) -->
-    <link data-trunk rel="rust" data-wasm-opt="z" data-bin="drone-frontend"/>
-    
+    <!-- Dioxus mount root: dioxus::launch renders the App here -->
+    <div id="main"></div>
+
     <script>
-        // Hide loading screen when WASM is ready
-        window.addEventListener('wasm-loaded', function() {
-            document.body.classList.add('loaded');
-        });
+        // Hide loading screen once the app has rendered its first frame:
+        // dx injects the WASM loader; we watch for the HUD container.
+        new MutationObserver(function(_, obs) {
+            if (document.querySelector('.hud-container')) {
+                document.body.classList.add('loaded'); obs.disconnect();
+            }
+        }).observe(document.getElementById('main'), { childList: true, subtree: true });
         
         // Fallback: hide after timeout if event doesn't fire
         setTimeout(function() {
