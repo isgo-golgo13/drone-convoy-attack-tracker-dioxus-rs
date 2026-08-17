@@ -39,6 +39,17 @@ pub fn TelemetryChartPanel() -> Element {
             if series.len() < 2 {
                 return;
             }
+            // Guard: charming's render() unwraps getElementById; if this
+            // effect fires before the panel's div is painted, that unwrap
+            // panics and Dioxus abandons the effect for good (empty chart
+            // forever). Skip this pass; the next series update (2 s) re-fires.
+            let mounted = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.get_element_by_id(chart_id))
+                .is_some();
+            if !mounted {
+                return;
+            }
             let labels: Vec<String> = series.iter().map(|p| p.label.clone()).collect();
             let altitude_data: Vec<f64> = series.iter().map(|p| p.avg_altitude_m).collect();
             let fuel_data: Vec<f64> = series.iter().map(|p| p.avg_fuel_pct).collect();

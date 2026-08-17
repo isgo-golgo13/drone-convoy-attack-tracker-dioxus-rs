@@ -142,7 +142,12 @@ fn start_live_feed(mut state: AppState) {
     // ONLINE pill is an honest link indicator.
     use_future(move || async move {
         loop {
-            if let Some(convoy_id) = state.selected_convoy.peek().clone() {
+            // Copy the id OUT of the signal before any await: a `peek()`/`read()`
+            // guard held across an await point while another task writes the
+            // signal is a runtime borrow panic (it surfaced as a wasm-bindgen
+            // "imported JS function threw" with the poll silently dead).
+            let convoy_id: Option<Uuid> = *state.selected_convoy.peek();
+            if let Some(convoy_id) = convoy_id {
                 match services::fetch_leaderboard(convoy_id, 10).await {
                     Ok(entries) => {
                         state.ws_connected.set(true);
@@ -167,12 +172,10 @@ fn start_live_feed(mut state: AppState) {
                         // The engagement record carries no post-shot accuracy;
                         // stamp it from the freshest leaderboard so the feed
                         // reads like the subscription event would.
-                        let accuracy: HashMap<Uuid, f32> = state
-                            .leaderboard
-                            .peek()
-                            .iter()
-                            .map(|e| (e.drone_id, e.accuracy_pct))
-                            .collect();
+                        let accuracy: HashMap<Uuid, f32> = {
+                            let lb = state.leaderboard.peek();
+                            lb.iter().map(|e| (e.drone_id, e.accuracy_pct)).collect()
+                        }; // guard dropped here, before any further await
                         for e in &mut engagements {
                             if let Some(acc) = accuracy.get(&e.drone_id) {
                                 e.new_accuracy_pct = *acc;
@@ -211,6 +214,8 @@ fn push_telemetry_point(mut series_signal: Signal<Vec<TelemetryPoint>>, drones: 
 }
 
 pub fn main() {
+    // Panics (incl. Dioxus signal borrow errors) print their message + Rust
+    // backtrace to the console instead of a bare wasm-bindgen "threw".
     console_error_panic_hook::set_once();
     let _ = console_log::init_with_level(log::Level::Debug);
     log::info!("Drone Convoy Tracker v{} (Dioxus)", env!("CARGO_PKG_VERSION"));

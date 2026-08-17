@@ -292,8 +292,13 @@ pub fn MapPanel() -> Element {
     use_effect(move || {
         if *initialized.peek() { return; }
         initialized.set(true);
-        // Use setTimeout to ensure DOM element exists
-        let closure = Closure::once(Box::new(move || {
+        // Everything below runs INSIDE the Dioxus scheduler (spawn + async
+        // sleep instead of a raw setTimeout/setInterval). That is what makes
+        // the signal writes in the sync/flight loops safe: a raw JS callback
+        // firing mid-render trips the runtime's RefCell ("already borrowed").
+        spawn(async move {
+            gloo_timers::future::sleep(std::time::Duration::from_millis(100)).await;
+            {
             if !leaflet_available() {
                 log::error!("Leaflet not loaded!");
                 return;
@@ -428,9 +433,14 @@ pub fn MapPanel() -> Element {
                         // are one selection, not three. Toggle on re-click.
                         {
                             let id = drone.drone_id;
+                            // Leaflet invokes this OUTSIDE the Dioxus scheduler; the
+                            // signal write is deferred onto it via spawn so a click
+                            // landing mid-render can never trip the runtime lock.
                             let on_click = Closure::wrap(Box::new(move || {
-                                let cur = *state.selected_drone.peek();
-                                state.selected_drone.set(if cur == Some(id) { None } else { Some(id) });
+                                spawn(async move {
+                                    let cur = *state.selected_drone.peek();
+                                    state.selected_drone.set(if cur == Some(id) { None } else { Some(id) });
+                                });
                             }) as Box<dyn FnMut()>);
                             marker.marker_on("click", on_click.as_ref().unchecked_ref());
                             on_click.forget(); // lives as long as the marker
@@ -449,14 +459,15 @@ pub fn MapPanel() -> Element {
             };
             // First sync immediately (covers a fast poll), then every second.
             sync();
-            let sync_closure = Closure::wrap(Box::new(sync) as Box<dyn FnMut()>);
-            if let Some(window) = web_sys::window() {
-                let _ = window.set_interval_with_callback_and_timeout_and_arguments_0(
-                    sync_closure.as_ref().unchecked_ref(),
-                    1_000,
-                );
+            {
+                let mut sync = sync;
+                spawn(async move {
+                    loop {
+                        gloo_timers::future::sleep(std::time::Duration::from_millis(1_000)).await;
+                        sync();
+                    }
+                });
             }
-            sync_closure.forget();
 
             // ---------------------------------------------------------------
             // Flight loop -- SERVER-ANCHORED.
@@ -549,15 +560,15 @@ pub fn MapPanel() -> Element {
                 }
             };
 
-            let flight = Closure::wrap(Box::new(tick) as Box<dyn FnMut()>);
-            if let Some(window) = web_sys::window() {
-                let _ = window.set_interval_with_callback_and_timeout_and_arguments_0(
-                    flight.as_ref().unchecked_ref(),
-                    FLIGHT_TICK_MS,
-                );
+            {
+                let mut tick = tick;
+                spawn(async move {
+                    loop {
+                        gloo_timers::future::sleep(std::time::Duration::from_millis(FLIGHT_TICK_MS as u64)).await;
+                        tick();
+                    }
+                });
             }
-            // Runs for the life of the page; dropping it would kill the callback.
-            flight.forget();
 
             // ---------------------------------------------------------------
             // Theater switch. Reactive on the header selector: re-centre,
@@ -631,16 +642,8 @@ pub fn MapPanel() -> Element {
 
             log::info!("map ready: {} — airframes join as they register on a {}-waypoint route",
                        initial.label, initial.route.len());
-        }) as Box<dyn FnOnce()>);
-
-        let window = web_sys::window().unwrap();
-        window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                closure.as_ref().unchecked_ref(),
-                100,
-            )
-            .unwrap();
-        closure.forget(); // Prevent closure from being dropped
+            }
+        });
     });
 
     let selected_drone = move || state.selected_drone.read().clone();
@@ -674,7 +677,9 @@ pub fn MapPanel() -> Element {
     // during render re-triggers the render (Dioxus rule).
     use_effect(move || {
         let viewed = (state.selected_theater)();
-        let flown = flown_theater(&state.drones.read());
+        // Compute with the read guard scoped, then write: never hold a
+        // read() on one signal while set()-ing another in the same effect.
+        let flown = { let d = state.drones.read(); flown_theater(&d) };
         if flown == Some(viewed) && state.retasking.peek().is_some() {
             state.retasking.set(None);
         }
