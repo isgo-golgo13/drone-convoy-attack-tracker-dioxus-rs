@@ -669,16 +669,21 @@ pub fn MapPanel() -> Element {
         Some((target.callsign, alt, hdg))
     };
 
+    // Clear the RETASKING transition once the server's positions land in the
+    // viewed theater. In an effect, NOT the render body: writing a signal
+    // during render re-triggers the render (Dioxus rule).
+    use_effect(move || {
+        let viewed = (state.selected_theater)();
+        let flown = flown_theater(&state.drones.read());
+        if flown == Some(viewed) && state.retasking.peek().is_some() {
+            state.retasking.set(None);
+        }
+    });
+
     // ---- View-time values (Dioxus re-renders on any signal read here) ----
     let viewed = (state.selected_theater)();
     let aor_label = viewed.theater().aor;
     let flown = flown_theater(&state.drones.read());
-    // Tasking in flight: the selector issued an order and the convoy has not
-    // reported from the new theater yet. Purely a transition state -- clears
-    // itself when the server's positions land in the viewed theater.
-    if flown == Some(viewed) && state.retasking.peek().is_some() {
-        state.retasking.set(None);
-    }
     let pending = (state.retasking)().is_some() || matches!(flown, Some(f) if f != viewed);
     let retask_label = match flown {
         Some(f) if f != viewed => format!("RETASKING FROM {}", f.theater().label),

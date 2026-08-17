@@ -40,12 +40,21 @@ const DEMO_CONVOY_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
 /// Points kept in the rolling telemetry chart (~1 minute at 2s per point).
 const TELEMETRY_SERIES_CAP: usize = 30;
 
+/// Stylesheet and favicon bundled by dx via `asset!()`. This is the Dioxus
+/// way to ship static files: dx copies them into the build output under a
+/// content-hashed path and the macro yields the URL. `main.css` is the SAME
+/// byte-for-byte file as the Leptos build.
+const MAIN_CSS: Asset = asset!("/style/main.css");
+const FAVICON: Asset = asset!("/assets/drone-favicon.svg");
+
 #[component]
 pub fn App() -> Element {
     let state = provide_app_state();
     start_live_feed(state);
 
     rsx! {
+        document::Stylesheet { href: MAIN_CSS }
+        document::Link { rel: "icon", r#type: "image/svg+xml", href: FAVICON }
         div { class: "scanlines" }
         div { class: "hud-container",
             Header {}
@@ -102,13 +111,16 @@ fn ToastContainer() -> Element {
 /// is then fetched in the background purely to override the selection if a
 /// different convoy is actually live.
 fn start_live_feed(mut state: AppState) {
-    state.mission_start.set(Some(Utc::now()));
-    if let Ok(id) = Uuid::parse_str(DEMO_CONVOY_ID) {
-        state.selected_convoy.set(Some(id));
-    }
-
-    // Background convoy discovery (runs once).
+    // Dioxus rule: never write signals during render (it re-triggers the
+    // render that owns these hooks and can restart the futures below). All
+    // initial state lands inside the once-only future instead. The demo
+    // convoy is selected on the first tick of that future — still before the
+    // first poll, so ONLINE within one interval of page load holds.
     use_future(move || async move {
+        state.mission_start.set(Some(Utc::now()));
+        if let Ok(id) = Uuid::parse_str(DEMO_CONVOY_ID) {
+            state.selected_convoy.set(Some(id));
+        }
         match services::fetch_active_convoys().await {
             Ok(convoys) => {
                 if let Some(first) = convoys.first() {

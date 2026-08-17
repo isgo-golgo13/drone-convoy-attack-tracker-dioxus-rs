@@ -8,11 +8,7 @@
     
     <title>DRONE OPS | Convoy Tracker</title>
     
-    <!-- Favicon: the same airframe SVG the map and drone cards render, with
-         HUD-green fallback colors baked in for favicon context. Served from
-         the crate's static asset dir (see Dioxus.toml asset_dir; the Makefile
-         syncs assets/images there via `make frontend-assets`). -->
-    <link rel="icon" type="image/svg+xml" href="/assets/drone-favicon.svg">
+    <!-- Favicon + app CSS are bundled by dx via asset!() in lib.rs (App root). -->
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,8 +20,6 @@
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
           crossorigin="">
     
-    <!-- App CSS: byte-identical to the Leptos build (see Dioxus.toml [web.resource]) -->
-    <link rel="stylesheet" href="/style/main.css">
     
     <style>
         /* Critical CSS for initial load */
