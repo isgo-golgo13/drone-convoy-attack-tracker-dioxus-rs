@@ -143,7 +143,7 @@ serve-api:
 
 .PHONY: serve-frontend
 serve-frontend: wasm-check frontend-assets
-	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000 --proxy http://localhost:8080
+	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000
 
 # Copy the shared favicon into the crate's static asset dir (dx serves it at
 # /assets/). assets/images/ at the repo root remains the single source.
@@ -387,7 +387,7 @@ dev-backend:
 .PHONY: dev-frontend
 dev-frontend: wasm-check
 	@printf "$(CYAN)▶ Starting frontend dev server...$(NC)\n"
-	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000 --proxy http://localhost:8080 --open
+	@cd $(FRONTEND_DIR) && $(DX) serve --platform web --port 3000 --open
 
 .PHONY: dev-db
 dev-db:
