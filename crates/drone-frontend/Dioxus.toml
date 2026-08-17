@@ -1,6 +1,10 @@
 # Dioxus CLI (dx) project config -- replaces Trunk.toml.
 # `dx serve --platform web` for dev (Makefile: serve-frontend),
 # `dx build --release --platform web` for the container image.
+#
+# Kept minimal on purpose: main.css and the favicon are linked directly from
+# index.html (served from the crate's `assets/` and `style/` dirs), so no
+# [web.resource] section is needed here.
 [application]
 name = "drone-frontend"
 default_platform = "web"
@@ -11,9 +15,6 @@ title = "Drone Convoy Tracker | DRONE OPS COMMAND"
 [web.watcher]
 watch_path = ["src", "style", "index.html", "../../assets"]
 reload_html = true
-
-[web.resource]
-style = ["style/main.css"]
 
 # Same-origin API in dev: the browser sees /graphql on :3000, dx forwards it
 # to the API on :8080. (Array-of-tables: dx can proxy several backends.)

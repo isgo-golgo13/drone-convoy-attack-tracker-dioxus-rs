@@ -99,7 +99,7 @@ pub struct LeaderboardEntry {
     pub rank_change: i32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DroneState {
     pub drone_id: Uuid,
     pub convoy_id: Uuid,
@@ -162,7 +162,7 @@ impl DroneStatus {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct Coordinates {
     pub latitude: f64,
     pub longitude: f64,
@@ -171,7 +171,7 @@ pub struct Coordinates {
     pub speed_mps: f32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EngagementEvent {
     pub id: Uuid,
     pub drone_id: Uuid,

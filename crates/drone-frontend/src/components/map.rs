@@ -417,7 +417,7 @@ pub fn MapPanel() -> Element {
                         )
                         .ok();
 
-                        let ip = route()[0];
+                        let ip = route.get()[0];
                         let marker = create_marker(&lat_lng(ip.0, ip.1), &opts.into());
                         marker.bind_popup(&popup);
                         marker.marker_add_to(&map);
@@ -431,7 +431,7 @@ pub fn MapPanel() -> Element {
                             let on_click = Closure::wrap(Box::new(move || {
                                 let cur = *state.selected_drone.peek();
                                 state.selected_drone.set(if cur == Some(id) { None } else { Some(id) });
-                            }) as Box<dyn Fn()>);
+                            }) as Box<dyn FnMut()>);
                             marker.marker_on("click", on_click.as_ref().unchecked_ref());
                             on_click.forget(); // lives as long as the marker
                         }
@@ -449,7 +449,7 @@ pub fn MapPanel() -> Element {
             };
             // First sync immediately (covers a fast poll), then every second.
             sync();
-            let sync_closure = Closure::wrap(Box::new(sync) as Box<dyn Fn()>);
+            let sync_closure = Closure::wrap(Box::new(sync) as Box<dyn FnMut()>);
             if let Some(window) = web_sys::window() {
                 let _ = window.set_interval_with_callback_and_timeout_and_arguments_0(
                     sync_closure.as_ref().unchecked_ref(),
@@ -549,7 +549,7 @@ pub fn MapPanel() -> Element {
                 }
             };
 
-            let flight = Closure::wrap(Box::new(tick) as Box<dyn Fn()>);
+            let flight = Closure::wrap(Box::new(tick) as Box<dyn FnMut()>);
             if let Some(window) = web_sys::window() {
                 let _ = window.set_interval_with_callback_and_timeout_and_arguments_0(
                     flight.as_ref().unchecked_ref(),
@@ -572,7 +572,7 @@ pub fn MapPanel() -> Element {
                 let last: Rc<Cell<TheaterId>> = Rc::new(Cell::new(state.selected_theater.peek().clone()));
                 use_effect(move || {
                     let id = state.selected_theater.read().clone();
-                    if id == last() { return; }
+                    if id == last.get() { return; }
                     last.set(id);
                     let t = id.theater();
                     map.set_view(&lat_lng(t.center.0, t.center.1), t.zoom);
@@ -606,7 +606,7 @@ pub fn MapPanel() -> Element {
                     let mut seen = seen.borrow_mut();
                     // First observation: mark everything seen without firing,
                     // so a page load mid-mission doesn't detonate 20 bursts.
-                    if !primed() {
+                    if !primed.get() {
                         for e in &events { seen.insert(e.id); }
                         primed.set(true);
                         return;

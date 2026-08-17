@@ -82,7 +82,7 @@ pub fn TacticalSelect<K: Copy + PartialEq + 'static>(
                     open.set(false);
                     cursor.set(-1);
                 }
-            }) as Box<dyn Fn(web_sys::MouseEvent)>);
+            }) as Box<dyn FnMut(web_sys::MouseEvent)>);
             let _ = document.add_event_listener_with_callback("mousedown", handler.as_ref().unchecked_ref());
             // Leaked per open cycle: the panel is short-lived and the listener
             // is idempotent (it only ever closes).

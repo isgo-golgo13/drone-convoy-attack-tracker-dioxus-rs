@@ -18,4 +18,5 @@ dist/
 .env-template
 
 .DS_Store
+.DS_Store/
 
