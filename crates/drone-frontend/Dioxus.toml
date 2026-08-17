@@ -4,13 +4,9 @@
 [application]
 name = "drone-frontend"
 default_platform = "web"
-# Static assets referenced via asset!() are bundled automatically; the
-# favicon and CSS are linked from index.html and served from /assets.
-asset_dir = "assets"
 
 [web.app]
 title = "Drone Convoy Tracker | DRONE OPS COMMAND"
-base_path = ""
 
 [web.watcher]
 watch_path = ["src", "style", "index.html", "../../assets"]
@@ -19,9 +15,7 @@ reload_html = true
 [web.resource]
 style = ["style/main.css"]
 
-[web.resource.dev]
-# API proxy: same origin in dev so the browser sees /graphql on :8080.
-# (dx serve --proxy is set in the Makefile so this stays declarative.)
-
-[web.proxy]
-backend = "http://localhost:8080"
+# Same-origin API in dev: the browser sees /graphql on :3000, dx forwards it
+# to the API on :8080. (Array-of-tables: dx can proxy several backends.)
+[[web.proxy]]
+backend = "http://localhost:8080/graphql"
